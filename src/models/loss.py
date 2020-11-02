@@ -8,6 +8,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import BertModel
 
 from models.reporter import Statistics
 
@@ -186,6 +187,46 @@ class LabelSmoothingLoss(nn.Module):
         model_prob.masked_fill_((target == self.padding_idx).unsqueeze(1), 0)
 
         return F.kl_div(output, model_prob, reduction='sum')
+
+
+class BertSimilarityLossCompute(LossComputeBase):
+    """
+    Use Bert to calculate similarity Computation.
+    """
+
+    def __init__(self, generator, symbols):
+        super(BertSimilarityLossCompute, self).__init__(generator, symbols['PAD'])
+        self.sparse = not isinstance(generator[1], nn.LogSoftmax)
+        
+        self.bert = BertModel.from_pretrained('bert-base-uncased',
+                                    output_attentions=False,
+                                    output_hidden_states=False,
+        )
+        self.bert = self.bert.cuda()
+
+        self.similarity = nn.CosineSimilarity(dim=0, eps=1e-6)
+
+    def _make_shard_state(self, batch, output):
+        return {
+            "output": output,
+            "target": batch.tgt[:,1:],
+        }
+
+    def _compute_loss(self, batch, output, target):
+        bottled_output = self._bottle(output)
+        scores = self.generator(bottled_output)
+        gtruth =target.contiguous().view(-1)
+
+        output_ids = torch.argmax(scores, dim=1)
+        s1 = self.bert(output_ids.unsqueeze(dim=0))
+        s2 = self.bert(gtruth.unsqueeze(dim=0))
+        s1 = s1[0][0, 0]
+        s2 = s2[0][0, 0]
+        loss = self.similarity(s1, s2)
+
+        stats = self._stats(loss.clone(), scores, gtruth)
+
+        return loss, stats
 
 
 class NMTLossCompute(LossComputeBase):
