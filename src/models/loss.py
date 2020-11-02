@@ -14,9 +14,11 @@ from models.reporter import Statistics
 
 
 def abs_loss(generator, symbols, vocab_size, device, train=True, label_smoothing=0.0):
-    compute = NMTLossCompute(
-        generator, symbols, vocab_size,
-        label_smoothing=label_smoothing if train else 0.0)
+    # compute = NMTLossCompute(
+    #     generator, symbols, vocab_size,
+    #     label_smoothing=label_smoothing if train else 0.0)
+    compute = BertSimilarityLossCompute(generator, symbols)
+    
     compute.to(device)
     return compute
 
