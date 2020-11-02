@@ -8,7 +8,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from transformers import BertModel
+from pytorch_transformers import BertModel
 
 from models.reporter import Statistics
 
