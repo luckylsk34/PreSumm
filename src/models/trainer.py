@@ -220,8 +220,15 @@ class Trainer(object):
             mask_tgt = batch.mask_tgt
             mask_cls = batch.mask_cls
 
+            # print(self.model.bert.model.encoder.layer[0].intermediate.dense.weight.grad)
             outputs, scores = self.model(src, tgt,segs, clss, mask_src, mask_tgt, mask_cls)
-            batch_stats = self.loss.sharded_compute_loss(batch, outputs, self.args.generator_shard_size, normalization)
+            # batch_stats = self.loss.sharded_compute_loss(batch, outputs, self.args.generator_shard_size, normalization)
+            loss, batch_stats = self.loss.monolithic_compute_loss(batch, outputs)
+            # print("actual loss", loss)
+            loss.backward()
+            # print(outputs.grad)
+            # print(self.loss.bert.encoder.layer[0].intermediate.dense.weight.grad)
+            # print(self.model.bert.model.encoder.layer[0].intermediate.dense.weight.grad)
 
             batch_stats.n_docs = int(src.size(0))
 

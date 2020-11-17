@@ -8,7 +8,7 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from pytorch_transformers import BertModel
+from transformers import BertModel
 
 from models.reporter import Statistics
 
@@ -93,9 +93,9 @@ class LossComputeBase(nn.Module):
             :obj:`onmt.utils.Statistics`: loss statistics
         """
         shard_state = self._make_shard_state(batch, output)
-        _, batch_stats = self._compute_loss(batch, **shard_state)
+        loss, batch_stats = self._compute_loss(batch, **shard_state)
 
-        return batch_stats
+        return loss, batch_stats
 
     def sharded_compute_loss(self, batch, output,
                               shard_size,
@@ -204,6 +204,7 @@ class BertSimilarityLossCompute(LossComputeBase):
                                     output_attentions=False,
                                     output_hidden_states=False,
         )
+        self.bert = self.bert.train()
         self.bert = self.bert.cuda()
 
         self.similarity = nn.CosineSimilarity(dim=0, eps=1e-6)
@@ -217,14 +218,17 @@ class BertSimilarityLossCompute(LossComputeBase):
     def _compute_loss(self, batch, output, target):
         bottled_output = self._bottle(output)
         scores = self.generator(bottled_output)
-        gtruth =target.contiguous().view(-1)
+        gtruth = target.contiguous().view(-1)
 
-        output_ids = torch.argmax(scores, dim=1)
-        s1 = self.bert(output_ids.unsqueeze(dim=0))
+        # The output_ids are used as indeces for embedding matrix. the gradient cannot be calculated from this.
+        # output_ids = torch.argmax(scores, dim=1)
+        # s1 = self.bert(output_ids.unsqueeze(dim=0))
+        # Instead we calculate the embedding directly from the scores generated.
+        s1 = self.bert(inputs_embeds=(scores @ self.bert.embeddings.word_embeddings.weight).unsqueeze(dim=0))
         s2 = self.bert(gtruth.unsqueeze(dim=0))
         s1 = s1[0][0, 0]
         s2 = s2[0][0, 0]
-        loss = self.similarity(s1, s2)
+        loss = self.similarity(s1, s2) * 2000
 
         stats = self._stats(loss.clone(), scores, gtruth)
 
