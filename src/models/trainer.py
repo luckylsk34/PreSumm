@@ -98,6 +98,7 @@ class Trainer(object):
         self.report_manager = report_manager
 
         self.loss = loss
+        self.loss_optim = torch.optim.SGD(model.parameters())
 
         assert grad_accum_count > 0
         # Set model in training mode.
@@ -225,6 +226,7 @@ class Trainer(object):
             # batch_stats = self.loss.sharded_compute_loss(batch, outputs, self.args.generator_shard_size, normalization)
             loss, batch_stats = self.loss.monolithic_compute_loss(batch, outputs)
             # print("actual loss", loss)
+            self.loss_optim.zero_grad()
             loss.backward()
             # print(outputs.grad)
             # print(self.loss.bert.encoder.layer[0].intermediate.dense.weight.grad)
