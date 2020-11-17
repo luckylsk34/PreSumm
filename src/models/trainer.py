@@ -98,7 +98,7 @@ class Trainer(object):
         self.report_manager = report_manager
 
         self.loss = loss
-        self.loss_optim = torch.optim.SGD(model.parameters())
+        self.loss_optim = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
 
         assert grad_accum_count > 0
         # Set model in training mode.
