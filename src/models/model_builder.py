@@ -101,9 +101,19 @@ def build_optim_dec(args, model, checkpoint):
 
     return optim
 
+class GumbelSoftmax(nn.Module):
+    def __init__(self, tau=1, hard=False, dim=-1):
+        super().__init__()
+
+        self.tau = tau
+        self.hard = hard
+        self.dim = dim
+    
+    def forward(self, logits):
+        return nn.functional.gumbel_softmax(logits, tau=self.tau, hard=self.hard, dim=self.dim)
 
 def get_generator(vocab_size, dec_hidden_size, device):
-    gen_func = nn.LogSoftmax(dim=-1)
+    gen_func = GumbelSoftmax(tau=0.4)
     generator = nn.Sequential(
         nn.Linear(dec_hidden_size, vocab_size),
         gen_func

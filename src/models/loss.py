@@ -217,8 +217,7 @@ class BertSimilarityLossCompute(LossComputeBase):
 
     def _compute_loss(self, batch, output, target):
         bottled_output = self._bottle(output)
-        # scores = self.generator(bottled_output)
-        scores = nn.functional.gumbel_softmax(bottled_output, tau=0.4, dim=-1)
+        scores = self.generator(bottled_output)
         gtruth = target.contiguous().view(-1)
 
         # The output_ids are used as indeces for embedding matrix. the gradient cannot be calculated from this.
