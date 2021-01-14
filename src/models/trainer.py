@@ -198,7 +198,7 @@ class Trainer(object):
 
                 outputs, _ = self.model(src, tgt, segs, clss, mask_src, mask_tgt, mask_cls)
 
-                batch_stats = self.loss.monolithic_compute_loss(batch, outputs)
+                _, batch_stats = self.loss.monolithic_compute_loss(batch, outputs)
                 stats.update(batch_stats)
             self._report_step(0, step, valid_stats=stats)
             return stats
