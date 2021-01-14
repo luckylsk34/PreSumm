@@ -101,6 +101,30 @@ def build_optim_dec(args, model, checkpoint):
 
     return optim
 
+def gumbel_softmax(logits, tau=1, hard=False, eps=1e-10, dim=-1):
+    # type: (Tensor, float, bool, float, int) -> Tensor
+
+    # Check this Issue: https://github.com/pytorch/pytorch/issues/22442
+    # if eps != 1e-10:
+    #     warnings.warn("`eps` parameter is deprecated and has no effect.")
+
+    # gumbels = -torch.empty_like(logits).exponential_().log()  # ~Gumbel(0,1)
+    
+    gumbels = - (torch.empty_like(logits).exponential_() + eps).log()  # ~Gumbel(0,1)
+    gumbels = (logits + gumbels) / tau  # ~Gumbel(logits,tau)
+    y_soft = gumbels.softmax(dim)
+
+    if hard:
+        # Straight through.
+        index = y_soft.max(dim, keepdim=True)[1]
+        y_hard = torch.zeros_like(logits).scatter_(dim, index, 1.0)
+        ret = y_hard - y_soft.detach() + y_soft
+    else:
+        # Reparametrization trick.
+        ret = y_soft
+    return ret
+
+
 class GumbelSoftmax(nn.Module):
     def __init__(self, tau=1, hard=False, dim=-1):
         super().__init__()
@@ -110,7 +134,9 @@ class GumbelSoftmax(nn.Module):
         self.dim = dim
     
     def forward(self, logits):
-        return nn.functional.gumbel_softmax(logits, tau=self.tau, hard=self.hard, dim=self.dim)
+        return gumbel_softmax(logits, tau=self.tau, hard=self.hard, dim=self.dim)
+        # return nn.functional.gumbel_softmax(logits, tau=self.tau, hard=self.hard, eps=1e-6, dim=self.dim)
+        # return nn.functional.softmax(logits, dim=self.dim)
 
 def get_generator(vocab_size, dec_hidden_size, device):
     gen_func = GumbelSoftmax(tau=0.4)
