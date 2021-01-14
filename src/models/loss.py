@@ -217,13 +217,17 @@ class BertSimilarityLossCompute(LossComputeBase):
 
     def _compute_loss(self, batch, output, target):
         bottled_output = self._bottle(output)
-        scores = self.generator(bottled_output)
+        # scores = self.generator(bottled_output)
+        scores = nn.functional.gumbel_softmax(bottled_output, tau=0.4, dim=-1)
         gtruth = target.contiguous().view(-1)
 
         # The output_ids are used as indeces for embedding matrix. the gradient cannot be calculated from this.
         # output_ids = torch.argmax(scores, dim=1)
         # s1 = self.bert(output_ids.unsqueeze(dim=0))
         # Instead we calculate the embedding directly from the scores generated.
+        # This is a small optimization. Cap of 512 is applied again in BERT.
+        scores = scores[:512]
+        gtruth = gtruth[:512]
         s1 = self.bert(inputs_embeds=(scores @ self.bert.embeddings.word_embeddings.weight).unsqueeze(dim=0))
         s2 = self.bert(gtruth.unsqueeze(dim=0))
         s1 = s1[0][0, 0]
