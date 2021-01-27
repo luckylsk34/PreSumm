@@ -8,6 +8,8 @@ from __future__ import division
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from transformers import BertModel
+from pickle import dump
 
 from models.reporter import Statistics
 
@@ -206,11 +208,43 @@ class NMTLossCompute(LossComputeBase):
                 ignore_index=self.padding_idx, reduction='sum'
             )
 
+        self.bert = BertModel.from_pretrained('bert-base-uncased',
+                                    output_attentions=False,
+                                    output_hidden_states=False,
+        )
+        self.bert = self.bert.train()
+        self.bert = self.bert.cuda()
+
+        self.similarity = nn.CosineSimilarity(dim=0, eps=1e-6)
+
+        self.losses = []
+        self.bert_sim_losses = []
+        self.called = 0
+
+
     def _make_shard_state(self, batch, output):
         return {
             "output": output,
             "target": batch.tgt[:,1:],
         }
+
+    def maybe_save_losses(self):
+        self.called += 1
+        if self.called == 100:
+            with open("/content/losses.pckl", 'wb') as f:
+                dump([self.losses, self.bert_sim_losses], f)
+            self.called = 0
+
+    def bert_compute_loss(self, scores, gtruth):
+        scores = scores[:512]
+        gtruth = gtruth[:512]
+        s1 = self.bert(inputs_embeds=(scores @ self.bert.embeddings.word_embeddings.weight).unsqueeze(dim=0))
+        s2 = self.bert(gtruth.unsqueeze(dim=0))
+        s1 = s1[0][0, 0]
+        s2 = s2[0][0, 0]
+        loss = (1 - self.similarity(s1, s2)) * 500
+
+        return loss
 
     def _compute_loss(self, batch, output, target):
         bottled_output = self._bottle(output)
@@ -218,6 +252,12 @@ class NMTLossCompute(LossComputeBase):
         gtruth =target.contiguous().view(-1)
 
         loss = self.criterion(scores, gtruth)
+        bert_sim_loss = self.bert_compute_loss(scores, gtruth)
+
+        # Store the losses for saving later.
+        self.losses.append(loss.item())
+        self.bert_sim_losses.append(bert_sim_loss.item())        
+        self.maybe_save_losses()
 
         stats = self._stats(loss.clone(), scores, gtruth)
 
