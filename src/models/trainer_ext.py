@@ -227,6 +227,8 @@ class Trainer(object):
 
         can_path = '%s_step%d.candidate' % (self.args.result_path, step)
         gold_path = '%s_step%d.gold' % (self.args.result_path, step)
+    
+        save_sel_ids = open('test_output.selected_ids.txt', 'w')
         with open(can_path, 'w') as save_pred:
             with open(gold_path, 'w') as save_gold:
                 with torch.no_grad():
@@ -238,6 +240,7 @@ class Trainer(object):
                         mask_cls = batch.mask_cls
                         gold = []
                         pred = []
+                        sel_ids = []
                         if (cal_lead):
                             selected_ids = [list(range(batch.clss.size(1)))] * batch.batch_size
                         elif (cal_oracle):
@@ -260,6 +263,7 @@ class Trainer(object):
 
                         for i, idx in enumerate(selected_ids):
                             _pred = []
+                            _sel_ids = ['0' for _ in range(len(batch.src_str[i]))]
                             if (len(batch.src_str[i]) == 0):
                                 continue
                             for j in selected_ids[i][:len(batch.src_str[i])]:
@@ -269,8 +273,10 @@ class Trainer(object):
                                 if (self.args.block_trigram):
                                     if (not _block_tri(candidate, _pred)):
                                         _pred.append(candidate)
+                                        _sel_ids[j] = '1'
                                 else:
                                     _pred.append(candidate)
+                                    _sel_ids[j] = '1'
 
                                 if ((not cal_oracle) and (not self.args.recall_eval) and len(_pred) == 3):
                                     break
@@ -278,14 +284,20 @@ class Trainer(object):
                             _pred = '<q>'.join(_pred)
                             if (self.args.recall_eval):
                                 _pred = ' '.join(_pred.split()[:len(batch.tgt_str[i].split())])
+                            _sel_ids = ' '.join(_sel_ids)
 
                             pred.append(_pred)
                             gold.append(batch.tgt_str[i])
-
+                            sel_ids.append(_sel_ids)
                         for i in range(len(gold)):
                             save_gold.write(gold[i].strip() + '\n')
                         for i in range(len(pred)):
                             save_pred.write(pred[i].strip() + '\n')
+                        for i in range(len(sel_ids)):
+                            save_sel_ids.write(sel_ids[i].strip() + '\n')
+
+        save_sel_ids.close()
+
         if (step != -1 and self.args.report_rouge):
             rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
             logger.info('Rouges at step %d \n%s' % (step, rouge_results_to_str(rouges)))
