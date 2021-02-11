@@ -229,6 +229,7 @@ class Trainer(object):
         gold_path = '%s_step%d.gold' % (self.args.result_path, step)
     
         save_sel_ids = open('test_output.selected_ids.txt', 'w')
+        save_sel_order = open('test_output.selected_order.txt', 'w')
         with open(can_path, 'w') as save_pred:
             with open(gold_path, 'w') as save_gold:
                 with torch.no_grad():
@@ -241,6 +242,7 @@ class Trainer(object):
                         gold = []
                         pred = []
                         sel_ids = []
+                        sel_order = []
                         if (cal_lead):
                             selected_ids = [list(range(batch.clss.size(1)))] * batch.batch_size
                         elif (cal_oracle):
@@ -253,7 +255,7 @@ class Trainer(object):
                             sent_scores = sent_scores + mask.float()
                             sent_scores = sent_scores.cpu().data.numpy()
                             selected_ids = np.argsort(-sent_scores, 1)
-
+                            
                             if (hasattr(batch, 'src_sent_labels')):
                                 labels = batch.src_sent_labels
                                 loss = self.loss(sent_scores, labels.float())
@@ -285,18 +287,22 @@ class Trainer(object):
                             if (self.args.recall_eval):
                                 _pred = ' '.join(_pred.split()[:len(batch.tgt_str[i].split())])
                             _sel_ids = ' '.join(_sel_ids)
+                            _sel_order = ' '.join(idx.astype(np.str).tolist())
 
                             pred.append(_pred)
                             gold.append(batch.tgt_str[i])
                             sel_ids.append(_sel_ids)
+                            sel_order.append(_sel_order)
                         for i in range(len(gold)):
                             save_gold.write(gold[i].strip() + '\n')
                         for i in range(len(pred)):
                             save_pred.write(pred[i].strip() + '\n')
-                        for i in range(len(sel_ids)):
-                            save_sel_ids.write(sel_ids[i].strip() + '\n')
-
+                        for i in sel_ids:
+                            save_sel_ids.write(i.strip() + '\n')
+                        for i in sel_order:
+                            save_sel_order.write(i.strip() + '\n')
         save_sel_ids.close()
+        save_sel_order.close()
 
         if (step != -1 and self.args.report_rouge):
             rouges = test_rouge(self.args.temp_dir, can_path, gold_path)
